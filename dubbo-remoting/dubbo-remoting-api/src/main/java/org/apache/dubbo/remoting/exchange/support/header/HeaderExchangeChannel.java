@@ -103,6 +103,9 @@ final class HeaderExchangeChannel implements ExchangeChannel {
         return request(request, channel.getUrl().getPositiveParameter(TIMEOUT_KEY, DEFAULT_TIMEOUT));
     }
 
+    /**
+     *  dubbo调用时的 发送口
+     */
     @Override
     public CompletableFuture<Object> request(Object request, int timeout) throws RemotingException {
         if (closed) {
