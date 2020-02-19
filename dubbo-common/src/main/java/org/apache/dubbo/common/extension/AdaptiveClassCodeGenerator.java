@@ -203,7 +203,7 @@ public class AdaptiveClassCodeGenerator {
         Adaptive adaptiveAnnotation = method.getAnnotation(Adaptive.class);
         StringBuilder code = new StringBuilder(512);
         if (adaptiveAnnotation == null) {
-            //对于没有adapive的注解 则生成抛出方法不支持的异常
+            //对于没有adaptive的注解 则生成抛出方法不支持的异常
             return generateUnsupported(method);
         } else {
             int urlTypeIndex = getUrlTypeIndex(method);
