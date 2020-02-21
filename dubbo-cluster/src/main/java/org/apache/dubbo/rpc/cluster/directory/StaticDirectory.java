@@ -33,7 +33,7 @@ import java.util.List;
  */
 public class StaticDirectory<T> extends AbstractDirectory<T> {
     private static final Logger logger = LoggerFactory.getLogger(StaticDirectory.class);
-
+    // Invoker 列表
     private final List<Invoker<T>> invokers;
 
     public StaticDirectory(List<Invoker<T>> invokers) {
@@ -58,15 +58,19 @@ public class StaticDirectory<T> extends AbstractDirectory<T> {
 
     @Override
     public Class<T> getInterface() {
+
+        // 获取接口类
         return invokers.get(0).getInterface();
     }
 
     @Override
     public boolean isAvailable() {
+        // 检测服务目录是否可用
         if (isDestroyed()) {
             return false;
         }
         for (Invoker<T> invoker : invokers) {
+            // 只要有一个 Invoker 是可用的，就任务当前目录是可用的
             if (invoker.isAvailable()) {
                 return true;
             }
@@ -79,7 +83,9 @@ public class StaticDirectory<T> extends AbstractDirectory<T> {
         if (isDestroyed()) {
             return;
         }
+        // 调用父类销毁逻辑
         super.destroy();
+        // 遍历 Invoker 列表，并执行相应的销毁逻辑
         for (Invoker<T> invoker : invokers) {
             invoker.destroy();
         }
@@ -97,6 +103,7 @@ public class StaticDirectory<T> extends AbstractDirectory<T> {
         List<Invoker<T>> finalInvokers = invokers;
         if (routerChain != null) {
             try {
+                //使用路由链 路由
                 finalInvokers = routerChain.route(getConsumerUrl(), invocation);
             } catch (Throwable t) {
                 logger.error("Failed to execute router: " + getUrl() + ", cause: " + t.getMessage(), t);
