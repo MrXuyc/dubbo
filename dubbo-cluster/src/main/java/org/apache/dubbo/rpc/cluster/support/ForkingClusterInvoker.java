@@ -65,11 +65,15 @@ public class ForkingClusterInvoker<T> extends AbstractClusterInvoker<T> {
         try {
             checkInvokers(invokers, invocation);
             final List<Invoker<T>> selected;
+            // 获取 forks 配置
             final int forks = getUrl().getParameter(FORKS_KEY, DEFAULT_FORKS);
+            // 获取超时配置
             final int timeout = getUrl().getParameter(TIMEOUT_KEY, DEFAULT_TIMEOUT);
+            // 如果 forks 小于0 或者大于全部候选集，则直接将 invokers 赋值给 selected
             if (forks <= 0 || forks >= invokers.size()) {
                 selected = invokers;
             } else {
+                // 如果 forks 大于0 小于全部候选集，则调用select 选择
                 selected = new ArrayList<>();
                 for (int i = 0; i < forks; i++) {
                     Invoker<T> invoker = select(loadbalance, invocation, invokers, selected);
@@ -80,18 +84,25 @@ public class ForkingClusterInvoker<T> extends AbstractClusterInvoker<T> {
                 }
             }
             RpcContext.getContext().setInvokers((List) selected);
+            // 多线程调用
             final AtomicInteger count = new AtomicInteger();
             final BlockingQueue<Object> ref = new LinkedBlockingQueue<>();
             for (final Invoker<T> invoker : selected) {
+                // 为每个 Invoker 创建一个执行线程
                 executor.execute(new Runnable() {
                     @Override
                     public void run() {
                         try {
+                            // 进行远程调用
                             Result result = invoker.invoke(invocation);
+                            // 将结果存到阻塞队列中
                             ref.offer(result);
                         } catch (Throwable e) {
                             int value = count.incrementAndGet();
+                            // 仅在 value 大于等于 selected.size() 时，才将异常对象放入阻塞队列中
+                            // 保证优先放正确结果
                             if (value >= selected.size()) {
+                                // 将异常对象存入到阻塞队列中
                                 ref.offer(e);
                             }
                         }
@@ -99,11 +110,14 @@ public class ForkingClusterInvoker<T> extends AbstractClusterInvoker<T> {
                 });
             }
             try {
+                // 从阻塞队列中取出远程调用结果
                 Object ret = ref.poll(timeout, TimeUnit.MILLISECONDS);
+                // 如果结果类型为 Throwable，则抛出异常
                 if (ret instanceof Throwable) {
                     Throwable e = (Throwable) ret;
                     throw new RpcException(e instanceof RpcException ? ((RpcException) e).getCode() : 0, "Failed to forking invoke provider " + selected + ", but no luck to perform the invocation. Last error is: " + e.getMessage(), e.getCause() != null ? e.getCause() : e);
                 }
+                // 返回结果
                 return (Result) ret;
             } catch (InterruptedException e) {
                 throw new RpcException("Failed to forking invoke provider " + selected + ", but no luck to perform the invocation. Last error is: " + e.getMessage(), e);

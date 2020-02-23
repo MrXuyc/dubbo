@@ -77,6 +77,7 @@ public class FailbackClusterInvoker<T> extends AbstractClusterInvoker<T> {
         if (failTimer == null) {
             synchronized (this) {
                 if (failTimer == null) {
+                    // 创建定时任务
                     failTimer = new HashedWheelTimer(
                             new NamedThreadFactory("failback-cluster-timer", true),
                             1,
@@ -84,8 +85,10 @@ public class FailbackClusterInvoker<T> extends AbstractClusterInvoker<T> {
                 }
             }
         }
+        // 创建重试任务
         RetryTimerTask retryTimerTask = new RetryTimerTask(loadbalance, invocation, invokers, lastInvoker, retries, RETRY_FAILED_PERIOD);
         try {
+            // 5s 执行一次
             failTimer.newTimeout(retryTimerTask, RETRY_FAILED_PERIOD, TimeUnit.SECONDS);
         } catch (Throwable e) {
             logger.error("Failback background works error,invocation->" + invocation + ", exception: " + e.getMessage());
@@ -96,13 +99,19 @@ public class FailbackClusterInvoker<T> extends AbstractClusterInvoker<T> {
     protected Result doInvoke(Invocation invocation, List<Invoker<T>> invokers, LoadBalance loadbalance) throws RpcException {
         Invoker<T> invoker = null;
         try {
+            // invokers 判空
             checkInvokers(invokers, invocation);
+            // 选择 Invoker
             invoker = select(loadbalance, invocation, invokers, null);
+            // 进行调用
             return invoker.invoke(invocation);
         } catch (Throwable e) {
+            // 如果调用过程中发生异常，此时仅打印错误日志，不抛出异常
             logger.error("Failback to invoke method " + invocation.getMethodName() + ", wait for retry in background. Ignored exception: "
                     + e.getMessage() + ", ", e);
+            // 记录调用信息
             addFailed(loadbalance, invocation, invokers, invoker);
+            // 返回一个空结果给服务消费者
             return AsyncRpcResult.newDefaultAsyncResult(null, null, invocation); // ignore
         }
     }
@@ -139,10 +148,13 @@ public class FailbackClusterInvoker<T> extends AbstractClusterInvoker<T> {
         @Override
         public void run(Timeout timeout) {
             try {
+                // 选择 invoker
                 Invoker<T> retryInvoker = select(loadbalance, invocation, invokers, Collections.singletonList(lastInvoker));
                 lastInvoker = retryInvoker;
+                // 调用执行
                 retryInvoker.invoke(invocation);
             } catch (Throwable e) {
+                // 如果出现异常，没有达到尝试超时次数，再重试
                 logger.error("Failed retry to invoke method " + invocation.getMethodName() + ", waiting again.", e);
                 if ((++retryTimes) >= retries) {
                     logger.error("Failed retry times exceed threshold (" + retries + "), We have to abandon, invocation->" + invocation);

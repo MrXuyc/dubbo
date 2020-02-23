@@ -53,14 +53,21 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
     @SuppressWarnings("unchecked")
     @Override
     protected <T> Invoker<T> doSelect(List<Invoker<T>> invokers, URL url, Invocation invocation) {
+        // 获取方法名
         String methodName = RpcUtils.getMethodName(invocation);
+        // 获取 执行key ServiceKey+MethodName
         String key = invokers.get(0).getUrl().getServiceKey() + "." + methodName;
+        // 获取当前 invokers 的 hashcode
         int identityHashCode = System.identityHashCode(invokers);
         ConsistentHashSelector<T> selector = (ConsistentHashSelector<T>) selectors.get(key);
+        // 如果 invokers 是一个新的 List 对象，意味着服务提供者数量发生了变化，可能新增也可能减少了。
+        // 此时 selector.identityHashCode != identityHashCode 条件成立
         if (selector == null || selector.identityHashCode != identityHashCode) {
+            // 创建新的 ConsistentHashSelector
             selectors.put(key, new ConsistentHashSelector<T>(invokers, methodName, identityHashCode));
             selector = (ConsistentHashSelector<T>) selectors.get(key);
         }
+        // 调用 ConsistentHashSelector 的 select 方法选择 Invoker
         return selector.select(invocation);
     }
 
@@ -74,11 +81,18 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
 
         private final int[] argumentIndex;
 
+        /**
+         * // 该方法主要创建虚拟节点对应关系
+         */
         ConsistentHashSelector(List<Invoker<T>> invokers, String methodName, int identityHashCode) {
+
             this.virtualInvokers = new TreeMap<Long, Invoker<T>>();
+            //记录现阶段 invokers 的hashcode
             this.identityHashCode = identityHashCode;
             URL url = invokers.get(0).getUrl();
+            // 获取虚拟节点数，默认为160
             this.replicaNumber = url.getMethodParameter(methodName, HASH_NODES, 160);
+            // 获取参与 hash 计算的参数下标值，默认对第一个参数进行 hash 运算
             String[] index = COMMA_SPLIT_PATTERN.split(url.getMethodParameter(methodName, HASH_ARGUMENTS, "0"));
             argumentIndex = new int[index.length];
             for (int i = 0; i < index.length; i++) {
@@ -87,9 +101,16 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
             for (Invoker<T> invoker : invokers) {
                 String address = invoker.getUrl().getAddress();
                 for (int i = 0; i < replicaNumber / 4; i++) {
+                    // 对 address + i 进行 md5 运算，得到一个长度为16的字节数组
                     byte[] digest = md5(address + i);
+                    // 对 digest 部分字节进行4次 hash 运算，得到四个不同的 long 型正整数
                     for (int h = 0; h < 4; h++) {
+                        // h = 0 时，取 digest 中下标为 0 ~ 3 的4个字节进行位运算
+                        // h = 1 时，取 digest 中下标为 4 ~ 7 的4个字节进行位运算
+                        // h = 2, h = 3 时过程同上
                         long m = hash(digest, h);
+                        // 将 hash 到 invoker 的映射关系存储到 virtualInvokers 中，
+                        // virtualInvokers 中的元素要有序，因此选用 TreeMap 作为存储结构
                         virtualInvokers.put(m, invoker);
                     }
                 }
@@ -97,8 +118,11 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
         }
 
         public Invoker<T> select(Invocation invocation) {
+            // 将参数转为 key 此处用到初始化记录的hash参数索引 默认是 0
             String key = toKey(invocation.getArguments());
+            // 对参数 key 进行 md5 运算
             byte[] digest = md5(key);
+            // 寻找合适的 Invoker
             return selectForKey(hash(digest, 0));
         }
 
@@ -113,7 +137,10 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
         }
 
         private Invoker<T> selectForKey(long hash) {
+            // 到 TreeMap 中查找第一个节点值大于或等于当前 hash 的 Invoker
             Map.Entry<Long, Invoker<T>> entry = virtualInvokers.ceilingEntry(hash);
+            // 如果 hash 大于 Invoker 在圆环上最大的位置，此时 entry = null，
+            // 需要将 TreeMap 的头结点赋值给 entry
             if (entry == null) {
                 entry = virtualInvokers.firstEntry();
             }
