@@ -55,17 +55,21 @@ public class HeaderExchangeClient implements ExchangeClient {
     public HeaderExchangeClient(Client client, boolean startTimer) {
         Assert.notNull(client, "Client can't be null");
         this.client = client;
+        // 创建 HeaderExchangeChannel 对象
         this.channel = new HeaderExchangeChannel(client);
 
         if (startTimer) {
             URL url = client.getUrl();
+            // 开启重连任务
             startReconnectTask(url);
+            // 开启心跳检测定时器
             startHeartBeatTask(url);
         }
     }
 
     @Override
     public CompletableFuture<Object> request(Object request) throws RemotingException {
+        // 直接 HeaderExchangeChannel 对象的同签名方法
         return channel.request(request);
     }
 
@@ -81,6 +85,7 @@ public class HeaderExchangeClient implements ExchangeClient {
 
     @Override
     public CompletableFuture<Object> request(Object request, int timeout) throws RemotingException {
+        // 直接 HeaderExchangeChannel 对象的同签名方法
         return channel.request(request, timeout);
     }
 
@@ -106,11 +111,13 @@ public class HeaderExchangeClient implements ExchangeClient {
 
     @Override
     public void send(Object message) throws RemotingException {
+        // 直接 HeaderExchangeChannel 对象的同签名方法
         channel.send(message);
     }
 
     @Override
     public void send(Object message, boolean sent) throws RemotingException {
+        // 直接 HeaderExchangeChannel 对象的同签名方法
         channel.send(message, sent);
     }
 
@@ -121,6 +128,8 @@ public class HeaderExchangeClient implements ExchangeClient {
 
     @Override
     public void close() {
+        // 停止心跳检测定时器
+        // 停止重连任务
         doClose();
         channel.close();
     }

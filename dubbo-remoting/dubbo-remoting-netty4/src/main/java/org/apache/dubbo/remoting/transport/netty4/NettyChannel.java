@@ -23,13 +23,13 @@ import org.apache.dubbo.remoting.ChannelHandler;
 import org.apache.dubbo.remoting.RemotingException;
 import org.apache.dubbo.remoting.transport.AbstractChannel;
 
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-
 import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 
 import static org.apache.dubbo.common.constants.CommonConstants.DEFAULT_TIMEOUT;
 import static org.apache.dubbo.common.constants.CommonConstants.TIMEOUT_KEY;
@@ -78,10 +78,13 @@ final class NettyChannel extends AbstractChannel {
         if (ch == null) {
             return null;
         }
+        // 尝试从集合中获取 NettyChannel 实例
         NettyChannel ret = CHANNEL_MAP.get(ch);
         if (ret == null) {
+            // 如果 ret = null，则创建一个新的 NettyChannel 实例
             NettyChannel nettyChannel = new NettyChannel(ch, url, handler);
             if (ch.isActive()) {
+                // 将 <Channel, NettyChannel> 键值对存入 channelMap 集合中
                 ret = CHANNEL_MAP.putIfAbsent(ch, nettyChannel);
             }
             if (ret == null) {
@@ -131,10 +134,15 @@ final class NettyChannel extends AbstractChannel {
         boolean success = true;
         int timeout = 0;
         try {
+            // 发送消息(包含请求和响应消息)
             ChannelFuture future = channel.writeAndFlush(message);
             if (sent) {
                 // wait timeout ms
+                // sent 的值源于 <dubbo:method sent="true/false" /> 中 sent 的配置值，有两种配置值：
+                //   1. true: 等待消息发出，消息发送失败将抛出异常
+                //   2. false: 不等待消息发出，将消息放入 IO 队列，即刻返回
                 timeout = getUrl().getPositiveParameter(TIMEOUT_KEY, DEFAULT_TIMEOUT);
+                // 等待消息发出，若在规定时间没能发出，success 会被置为 false
                 success = future.await(timeout);
             }
             Throwable cause = future.cause();
@@ -144,6 +152,7 @@ final class NettyChannel extends AbstractChannel {
         } catch (Throwable e) {
             throw new RemotingException(this, "Failed to send message " + message + " to " + getRemoteAddress() + ", cause: " + e.getMessage(), e);
         }
+        // 若 success 为 false，这里抛出异常
         if (!success) {
             throw new RemotingException(this, "Failed to send message " + message + " to " + getRemoteAddress()
                     + "in timeout(" + timeout + "ms) limit");

@@ -76,6 +76,7 @@ public class DecodeableRpcResult extends AppResponse implements Codec, Decodeabl
                 .deserialize(channel.getUrl(), input);
 
         byte flag = in.readByte();
+        // 反序列化响应类型
         switch (flag) {
             case DubboCodec.RESPONSE_NULL_VALUE:
                 break;
@@ -86,13 +87,16 @@ public class DecodeableRpcResult extends AppResponse implements Codec, Decodeabl
                 handleException(in);
                 break;
             case DubboCodec.RESPONSE_NULL_VALUE_WITH_ATTACHMENTS:
+                // 返回值为空，且携带了 attachments 集合
                 handleAttachment(in);
                 break;
             case DubboCodec.RESPONSE_VALUE_WITH_ATTACHMENTS:
+                // 返回值不为空，且携带了 attachments 集合
                 handleValue(in);
                 handleAttachment(in);
                 break;
             case DubboCodec.RESPONSE_WITH_EXCEPTION_WITH_ATTACHMENTS:
+                // 异常对象不为空，且携带了 attachments 集合
                 handleException(in);
                 handleAttachment(in);
                 break;
@@ -109,11 +113,13 @@ public class DecodeableRpcResult extends AppResponse implements Codec, Decodeabl
     public void decode() throws Exception {
         if (!hasDecoded && channel != null && inputStream != null) {
             try {
+                // 执行反序列化操作
                 decode(channel, inputStream);
             } catch (Throwable e) {
                 if (log.isWarnEnabled()) {
                     log.warn("Decode rpc result failed: " + e.getMessage(), e);
                 }
+                // 反序列化失败，设置 CLIENT_ERROR 状态到 Response 对象中
                 response.setStatus(Response.CLIENT_ERROR);
                 response.setErrorMessage(StringUtils.toString(e));
             } finally {
@@ -124,6 +130,7 @@ public class DecodeableRpcResult extends AppResponse implements Codec, Decodeabl
 
     private void handleValue(ObjectInput in) throws IOException {
         try {
+            // 获取返回值类型
             Type[] returnTypes = RpcUtils.getReturnTypes(invocation);
             Object value = null;
             if (ArrayUtils.isEmpty(returnTypes)) {
@@ -133,6 +140,7 @@ public class DecodeableRpcResult extends AppResponse implements Codec, Decodeabl
             } else {
                 value = in.readObject((Class<?>) returnTypes[0], returnTypes[1]);
             }
+            // 反序列化调用结果，并保存起来
             setValue(value);
         } catch (ClassNotFoundException e) {
             rethrow(e);
@@ -141,6 +149,7 @@ public class DecodeableRpcResult extends AppResponse implements Codec, Decodeabl
 
     private void handleException(ObjectInput in) throws IOException {
         try {
+            // 反序列化异常对象 设置异常对象
             Object obj = in.readObject();
             if (!(obj instanceof Throwable)) {
                 throw new IOException("Response data error, expect Throwable, but get " + obj);
@@ -153,6 +162,7 @@ public class DecodeableRpcResult extends AppResponse implements Codec, Decodeabl
 
     private void handleAttachment(ObjectInput in) throws IOException {
         try {
+            // 反序列化 attachments 集合，并存储起来
             setAttachments((Map<String, String>) in.readObject(Map.class));
         } catch (ClassNotFoundException e) {
             rethrow(e);

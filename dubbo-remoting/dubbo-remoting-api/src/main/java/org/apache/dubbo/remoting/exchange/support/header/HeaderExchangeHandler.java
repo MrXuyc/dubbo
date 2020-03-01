@@ -59,6 +59,7 @@ public class HeaderExchangeHandler implements ChannelHandlerDelegate {
 
     static void handleResponse(Channel channel, Response response) throws RemotingException {
         if (response != null && !response.isHeartbeat()) {
+            // 继续向下调用
             DefaultFuture.received(channel, response);
         }
     }
@@ -79,6 +80,7 @@ public class HeaderExchangeHandler implements ChannelHandlerDelegate {
 
     void handleRequest(final ExchangeChannel channel, Request req) throws RemotingException {
         Response res = new Response(req.getId(), req.getVersion());
+        // 检测请求是否合法，不合法则返回状态码为 BAD_REQUEST 的响应
         if (req.isBroken()) {
             Object data = req.getData();
 
@@ -91,24 +93,31 @@ public class HeaderExchangeHandler implements ChannelHandlerDelegate {
                 msg = data.toString();
             }
             res.setErrorMessage("Fail to decode request due to: " + msg);
+            // 设置 BAD_REQUEST 状态
             res.setStatus(Response.BAD_REQUEST);
 
             channel.send(res);
             return;
         }
         // find handler by message class.
+        // 获取 data 字段值，也就是 RpcInvocation 对象
         Object msg = req.getData();
         try {
+            // 继续向下调用
             CompletionStage<Object> future = handler.reply(channel, msg);
             future.whenComplete((appResult, t) -> {
                 try {
                     if (t == null) {
+                        // 设置 OK 状态码
                         res.setStatus(Response.OK);
+                        // 设置调用结果
                         res.setResult(appResult);
                     } else {
+                        // 若调用过程出现异常，则设置 SERVICE_ERROR，表示服务端异常
                         res.setStatus(Response.SERVICE_ERROR);
                         res.setErrorMessage(StringUtils.toString(t));
                     }
+                    // 将调用结果返回给服务消费端
                     channel.send(res);
                 } catch (RemotingException e) {
                     logger.warn("Send result to consumer failed, channel is " + channel + ", msg is " + e);
@@ -184,20 +193,28 @@ public class HeaderExchangeHandler implements ChannelHandlerDelegate {
         final ExchangeChannel exchangeChannel = HeaderExchangeChannel.getOrAddChannel(channel);
         try {
             if (message instanceof Request) {
+                // 处理请求对象
                 // handle request.
                 Request request = (Request) message;
                 if (request.isEvent()) {
+                    // 处理事件
                     handlerEvent(channel, request);
                 } else {
+                    // 处理普通的请求
                     if (request.isTwoWay()) {
+                        // 双向通信
+                        // 向后调用服务，并得到调用结果
                         handleRequest(exchangeChannel, request);
                     } else {
+                        // 如果是单向通信，仅向后调用指定服务即可，无需返回调用结果
                         handler.received(exchangeChannel, request.getData());
                     }
                 }
             } else if (message instanceof Response) {
+                // 处理响应
                 handleResponse(channel, (Response) message);
             } else if (message instanceof String) {
+                // telnet 相关，忽略
                 if (isClientSide(channel)) {
                     Exception e = new Exception("Dubbo client can not supported string message: " + message + " in channel: " + channel + ", url: " + channel.getUrl());
                     logger.error(e.getMessage(), e);

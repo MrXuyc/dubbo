@@ -72,19 +72,25 @@ public class MockClusterInvoker<T> implements Invoker<T> {
     public Result invoke(Invocation invocation) throws RpcException {
         Result result = null;
 
+        // 从服务目录url 获取 mock 配置值 默认是false
         String value = directory.getUrl().getMethodParameter(invocation.getMethodName(), MOCK_KEY, Boolean.FALSE.toString()).trim();
         if (value.length() == 0 || "false".equalsIgnoreCase(value)) {
             //no mock
+            // 无 mock 逻辑，直接调用其他 Invoker 对象的 invoke 方法，
+            // 比如 FailoverClusterInvoker
             result = this.invoker.invoke(invocation);
         } else if (value.startsWith("force")) {
             if (logger.isWarnEnabled()) {
                 logger.warn("force-mock: " + invocation.getMethodName() + " force-mock enabled , url : " + directory.getUrl());
             }
             //force:direct mock
+            // force:xxx 直接执行 mock 逻辑，不发起远程调用
             result = doMockInvoke(invocation, null);
         } else {
             //fail-mock
+            // fail:xxx 表示消费方对调用服务失败后，再执行 mock 逻辑，不抛出异常
             try {
+                // 调用其他 Invoker 对象的 invoke 方法
                 result = this.invoker.invoke(invocation);
 
                 //fix:#4585
@@ -93,6 +99,7 @@ public class MockClusterInvoker<T> implements Invoker<T> {
                     if(rpcException.isBiz()){
                         throw  rpcException;
                     }else {
+                        // 调用失败，执行 mock 逻辑
                         result = doMockInvoke(invocation, rpcException);
                     }
                 }
@@ -105,6 +112,7 @@ public class MockClusterInvoker<T> implements Invoker<T> {
                 if (logger.isWarnEnabled()) {
                     logger.warn("fail-mock: " + invocation.getMethodName() + " fail-mock enabled , url : " + directory.getUrl(), e);
                 }
+                // 调用失败，执行 mock 逻辑
                 result = doMockInvoke(invocation, e);
             }
         }
@@ -115,14 +123,16 @@ public class MockClusterInvoker<T> implements Invoker<T> {
     private Result doMockInvoke(Invocation invocation, RpcException e) {
         Result result = null;
         Invoker<T> minvoker;
-
+        // 从服务目录中寻找 mock 的 invoker,协议 protocol 是 mock 的
         List<Invoker<T>> mockInvokers = selectMockInvoker(invocation);
+        // 如果为空则 创建，不为空则选第一个。
         if (CollectionUtils.isEmpty(mockInvokers)) {
             minvoker = (Invoker<T>) new MockInvoker(directory.getUrl(), directory.getInterface());
         } else {
             minvoker = mockInvokers.get(0);
         }
         try {
+            // 执行调用
             result = minvoker.invoke(invocation);
         } catch (RpcException me) {
             if (me.isBiz()) {

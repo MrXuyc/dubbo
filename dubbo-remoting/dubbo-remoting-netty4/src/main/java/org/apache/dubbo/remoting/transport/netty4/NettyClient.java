@@ -28,6 +28,8 @@ import org.apache.dubbo.remoting.RemotingException;
 import org.apache.dubbo.remoting.transport.AbstractClient;
 import org.apache.dubbo.remoting.utils.UrlUtils;
 
+import java.net.InetSocketAddress;
+
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.Channel;
@@ -41,8 +43,6 @@ import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.concurrent.DefaultThreadFactory;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
-
-import java.net.InetSocketAddress;
 
 /**
  * NettyClient.
@@ -195,6 +195,7 @@ public class NettyClient extends AbstractClient {
         if (c == null || !c.isActive()) {
             return null;
         }
+        // 获取一个 NettyChannel 类型对象
         return NettyChannel.getOrAddChannel(c, getUrl(), this);
     }
 
